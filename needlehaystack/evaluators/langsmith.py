@@ -11,6 +11,26 @@ from langsmith.client import Client
 from langsmith.evaluation import EvaluationResult, run_evaluator
 from langsmith.schemas import Example, Run
 
+from rouge_score import rouge_scorer
+
+@run_evaluator
+def score_relevance_ROUGE(run: Run, example: Union[Example, None] = None):
+    """
+    Evaluates the model's response using ROUGE scores against the reference answer, instead of using LLM as judge.
+    """
+    student_answer = run.outputs["output"]
+    reference = example.outputs["answer"]
+
+    # Initialize the ROUGE scorer (L, 1, and 2 are common for text similarity)
+    scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
+    scores = scorer.score(reference, student_answer)
+
+    # Aggregate scores into a single relevance score (mean of the three ROUGE scores)
+    avg_score = (scores['rouge1'].fmeasure + scores['rouge2'].fmeasure + scores['rougeL'].fmeasure) / 3
+
+    return EvaluationResult(key="rouge_relevance", score=avg_score)
+
+
 @run_evaluator
 def score_relevance(run: Run, example: Union[Example, None] = None):
     """
@@ -107,7 +127,7 @@ class LangSmithEvaluator():
         """
         # Config
         evaluation_config = RunEvalConfig(
-            custom_evaluators = [score_relevance],
+            custom_evaluators = [score_relevance_ROUGE],
         )
 
         client = Client()
